@@ -1,0 +1,41 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "restaurant-management-bb01e",
+          "appId": "1:78602373009:android:507d49fc3adad57e7abc30",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "restaurant-management-bb01e",
+          "configurations": {
+            "android": "1:78602373009:android:507d49fc3adad57e7abc30",
+            "ios": "1:78602373009:ios:c2e7b2d20f0ac6297abc30",
+            "macos": "1:78602373009:ios:c2e7b2d20f0ac6297abc30",
+            "web": "1:78602373009:web:970fa38eac6be1197abc30",
+            "windows": "1:78602373009:web:df0ee664e7fe229c7abc30"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run lint"
+      ]
+    }
+  ]
+}
