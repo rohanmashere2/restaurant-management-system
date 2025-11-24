@@ -71,7 +71,7 @@ class BillHistoryScreenState extends State<BillHistoryScreen> {
                 style: GoogleFonts.lato(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.grey,
+                  color: Colors.black,
                 ),
               ),
             );

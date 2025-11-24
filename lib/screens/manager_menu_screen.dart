@@ -83,10 +83,11 @@ class ManagerMenuScreenState extends State<ManagerMenuScreen> {
             });
           },
           decoration: InputDecoration(
-            hintText: 'Search items...',
+            hintText: 'Search Items...',
             hintStyle: GoogleFonts.lato(
               fontSize: 20,
-              color: const Color.fromARGB(232, 255, 255, 255),
+              fontWeight: FontWeight.w500,
+              color: Colors.white,
             ),
             border: InputBorder.none,
             icon: const Icon(Icons.search, color: Colors.white),
@@ -95,7 +96,11 @@ class ManagerMenuScreenState extends State<ManagerMenuScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add, color: Colors.white),
+            icon: const Icon(
+              Icons.add,
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
             onPressed: () => addMenu(context),
           ),
         ],

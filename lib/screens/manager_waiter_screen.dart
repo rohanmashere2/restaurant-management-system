@@ -72,7 +72,11 @@ class ManagerWaiterScreenState extends ConsumerState<ManagerWaiterScreen> {
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.add, color: Colors.white),
+            icon: Icon(
+              Icons.add,
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
             onPressed: () => addWaiter(context),
           ),
         ],

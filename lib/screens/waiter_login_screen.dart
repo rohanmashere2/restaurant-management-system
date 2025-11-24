@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:restaurant_management/screens/selection_screen.dart';
 import 'package:restaurant_management/screens/waiter_home_screen.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
@@ -101,136 +102,145 @@ class WaiterLoginScreenState extends State<WaiterLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          FocusScope.of(context).unfocus();
-        },
-        child: Center(
-          child: SingleChildScrollView(
-            child: Container(
-              padding: EdgeInsets.all(20),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    SizedBox(height: 30),
-                    Text(
-                      'Login',
-                      style: GoogleFonts.lato(
-                        fontSize: 40,
-                        color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      'Add your details to login',
-                      style: GoogleFonts.poppins(
-                        color: Color.fromARGB(255, 73, 67, 67),
-                        fontWeight: FontWeight.w300,
-                      ),
-                    ),
-                    SizedBox(height: 15),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.email_outlined,
-                          color: Color.fromARGB(255, 90, 57, 44),
-                          size: 30,
-                        ),
-                        SizedBox(width: 10),
-                        Expanded(
-                          child: TextFormField(
-                            decoration: InputDecoration(
-                              label: Text(
-                                'Username',
-                                style: GoogleFonts.lato(
-                                  color: Color.fromARGB(255, 140, 93, 74),
-                                ),
-                              ),
-                            ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please enter the username.';
-                              }
-                              return null;
-                            },
-                            onSaved: (value) {
-                              _enteredUserName = value!.trim();
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 5),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.password_outlined,
-                          color: Color.fromARGB(255, 90, 57, 44),
-                          size: 30,
-                        ),
-                        SizedBox(width: 10),
-                        Expanded(
-                          child: TextFormField(
-                            decoration: InputDecoration(
-                              label: Text(
-                                'Password',
-                                style: GoogleFonts.lato(
-                                  color: Color.fromARGB(255, 140, 93, 74),
-                                ),
-                              ),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _passwordVisible
-                                      ? Icons.visibility
-                                      : Icons.visibility_off,
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    _passwordVisible = !_passwordVisible;
-                                  });
-                                },
-                              ),
-                            ),
-                            obscureText: !_passwordVisible,
-                            validator: (value) {
-                              if (value == null || value.trim().length < 6) {
-                                return 'Password must be at least 6 characters long.';
-                              }
-                              return null;
-                            },
-                            onSaved: (value) {
-                              _enteredPassword = value!.trim();
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 30),
-                    ElevatedButton(
-                      onPressed: waiterLoginSubmit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Color.fromARGB(255, 249, 111, 5),
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 110,
-                          vertical: 10,
-                        ),
-                      ),
-                      child: Text(
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => SelectionScreen()),
+        );
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            FocusScope.of(context).unfocus();
+          },
+          child: Center(
+            child: SingleChildScrollView(
+              child: Container(
+                padding: EdgeInsets.all(20),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    children: [
+                      SizedBox(height: 30),
+                      Text(
                         'Login',
                         style: GoogleFonts.lato(
-                          color: Colors.white,
-                          fontSize: 20,
+                          fontSize: 40,
+                          color: Colors.black,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
-                  ],
+                      SizedBox(height: 4),
+                      Text(
+                        'Add your details to login',
+                        style: GoogleFonts.poppins(
+                          color: Color.fromARGB(255, 73, 67, 67),
+                          fontWeight: FontWeight.w300,
+                        ),
+                      ),
+                      SizedBox(height: 15),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.email_outlined,
+                            color: Color.fromARGB(255, 90, 57, 44),
+                            size: 30,
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: TextFormField(
+                              decoration: InputDecoration(
+                                label: Text(
+                                  'Username',
+                                  style: GoogleFonts.lato(
+                                    color: Color.fromARGB(255, 140, 93, 74),
+                                  ),
+                                ),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Please enter the username.';
+                                }
+                                return null;
+                              },
+                              onSaved: (value) {
+                                _enteredUserName = value!.trim();
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 5),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.password_outlined,
+                            color: Color.fromARGB(255, 90, 57, 44),
+                            size: 30,
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: TextFormField(
+                              decoration: InputDecoration(
+                                label: Text(
+                                  'Password',
+                                  style: GoogleFonts.lato(
+                                    color: Color.fromARGB(255, 140, 93, 74),
+                                  ),
+                                ),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _passwordVisible
+                                        ? Icons.visibility
+                                        : Icons.visibility_off,
+                                  ),
+                                  onPressed: () {
+                                    setState(() {
+                                      _passwordVisible = !_passwordVisible;
+                                    });
+                                  },
+                                ),
+                              ),
+                              obscureText: !_passwordVisible,
+                              validator: (value) {
+                                if (value == null || value.trim().length < 6) {
+                                  return 'Password must be at least 6 characters long.';
+                                }
+                                return null;
+                              },
+                              onSaved: (value) {
+                                _enteredPassword = value!.trim();
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 30),
+                      ElevatedButton(
+                        onPressed: waiterLoginSubmit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color.fromARGB(255, 249, 111, 5),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 110,
+                            vertical: 10,
+                          ),
+                        ),
+                        child: Text(
+                          'Login',
+                          style: GoogleFonts.lato(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

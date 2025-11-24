@@ -16,10 +16,11 @@ class ManagerProfileScreenState extends State<ManagerProfileScreen> {
   final _formKey = GlobalKey<FormState>();
 
   String? userId;
-  String? name;
+  String? restaurantName;
   String? email;
   String? phone;
   String? address;
+  String? ownerName;
   bool isLoading = true;
 
   @override
@@ -43,10 +44,11 @@ class ManagerProfileScreenState extends State<ManagerProfileScreen> {
       if (doc.exists) {
         final data = doc.data();
         setState(() {
-          name = data?['Restaurant Name'];
+          restaurantName = data?['Restaurant Name'];
           email = data?['Email'];
           phone = data?['Mobile No'];
           address = data?['Address'];
+          ownerName = data?['Owner Name'];
           isLoading = false;
         });
       } else {
@@ -87,14 +89,16 @@ class ManagerProfileScreenState extends State<ManagerProfileScreen> {
           }
         }
 
-        await FirebaseFirestore.instance.collection('users').doc(userId).update(
-          {
-            'Restaurant Name': name,
-            'Email': email,
-            'Mobile No': phone,
-            'Address': address,
-          },
-        );
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .update({
+              'Restaurant Name': restaurantName,
+              'Owner Name': ownerName,
+              'Email': email,
+              'Mobile No': phone,
+              'Address': address,
+            });
         FocusScope.of(context).unfocus();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Profile updated successfully!')),
@@ -168,14 +172,14 @@ class ManagerProfileScreenState extends State<ManagerProfileScreen> {
                 Row(
                   children: [
                     const Icon(
-                      Icons.person,
+                      Icons.storefront,
                       color: Color.fromARGB(255, 90, 57, 44),
                       size: 29,
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: TextFormField(
-                        initialValue: name,
+                        initialValue: restaurantName,
                         style: GoogleFonts.lato(
                           color: const Color.fromARGB(255, 90, 57, 44),
                           fontSize: 18,
@@ -188,9 +192,40 @@ class ManagerProfileScreenState extends State<ManagerProfileScreen> {
                           ),
                         ),
                         validator: (value) => value == null || value.isEmpty
-                            ? 'Name is required'
+                            ? 'Restaurant Name is required'
                             : null,
-                        onSaved: (value) => name = value!.trim(),
+                        onSaved: (value) => restaurantName = value!.trim(),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.person,
+                      color: Color.fromARGB(255, 90, 57, 44),
+                      size: 29,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextFormField(
+                        initialValue: ownerName,
+                        style: GoogleFonts.lato(
+                          color: const Color.fromARGB(255, 90, 57, 44),
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        decoration: InputDecoration(
+                          labelText: 'Owner Name',
+                          labelStyle: GoogleFonts.lato(
+                            color: const Color.fromARGB(255, 16, 15, 15),
+                          ),
+                        ),
+                        validator: (value) => value == null || value.isEmpty
+                            ? 'Owner Name is required'
+                            : null,
+                        onSaved: (value) => ownerName = value!.trim(),
                       ),
                     ),
                   ],
@@ -304,7 +339,7 @@ class ManagerProfileScreenState extends State<ManagerProfileScreen> {
                     'Save Profile',
                     style: GoogleFonts.lato(
                       color: Colors.white,
-                      fontSize: 15,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),

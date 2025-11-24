@@ -640,6 +640,7 @@ class ManagerCheckoutScreenState extends State<ManagerCheckoutScreen> {
                               '${order['name']} x ${order['quantity']}',
                               style: GoogleFonts.lato(
                                 fontSize: 18,
+                                fontWeight: FontWeight.bold,
                                 color: Color.fromARGB(255, 90, 57, 44),
                               ),
                             ),

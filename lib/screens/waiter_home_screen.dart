@@ -1,7 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:restaurant_management/screens/waiter_login_screen.dart';
 import 'package:restaurant_management/screens/waiter_menu_screen.dart';
 import 'package:restaurant_management/screens/waiter_profile_screen.dart';
-import 'package:flutter/material.dart';
 
 class WaiterHomeScreen extends StatefulWidget {
   const WaiterHomeScreen({super.key, required this.username});
@@ -9,197 +10,190 @@ class WaiterHomeScreen extends StatefulWidget {
   final String username;
 
   @override
-  State<WaiterHomeScreen> createState() => WaiterHomeScreenState();
+  State<WaiterHomeScreen> createState() => _WaiterHomeScreenState();
 }
 
-class WaiterHomeScreenState extends State<WaiterHomeScreen> {
-  Stream<Map<String, String?>> getWaiterDetailsStream(String username) {
-    return FirebaseFirestore.instance.collection('users').snapshots().map((
-      snapshot,
-    ) {
-      for (var userDoc in snapshot.docs) {
-        final data = userDoc.data();
+class _WaiterHomeScreenState extends State<WaiterHomeScreen> {
+  late final Future<Map<String, String?>> _ownerInfoFuture;
 
-        // SAFE CHECK — if waiters is missing or null, skip this doc
-        if (data['waiters'] == null ||
-            data['waiters'] is! List ||
-            (data['waiters'] as List).isEmpty) {
-          continue;
-        }
+  @override
+  void initState() {
+    super.initState();
+    _ownerInfoFuture = _findOwnerForWaiter(widget.username);
+  }
 
-        final waiters = List.from(data['waiters']);
+  /// Find manager-user document that contains this waiter
+  Future<Map<String, String?>> _findOwnerForWaiter(String username) async {
+    final snap = await FirebaseFirestore.instance.collection('users').get();
 
-        for (var waiter in waiters) {
-          if (waiter['username'] == username) {
-            return {
-              'userId': userDoc.id,
-              'fullName': waiter['name'] ?? username,
-            };
-          }
+    for (final doc in snap.docs) {
+      final data = doc.data();
+
+      if (data['waiters'] == null || data['waiters'] is! List) continue;
+      final List waiters = List.from(data['waiters']);
+
+      for (final w in waiters) {
+        if (w is Map && (w['username']?.toString() ?? '') == username) {
+          final fullName = w['name']?.toString() ?? username;
+          return {'ownerId': doc.id, 'fullName': fullName};
         }
       }
+    }
 
-      // If no waiter found
-      return {'userId': null, 'fullName': null};
-    });
+    // not found
+    return {'ownerId': '', 'fullName': username};
   }
 
-  Stream<List<String>> getTablesStream(String userId) {
-    return FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .snapshots()
-        .map((docSnapshot) {
-          if (docSnapshot.exists) {
-            final userData = docSnapshot.data() as Map<String, dynamic>;
-            return List<String>.from(userData['tables'] ?? []);
-          }
-          return [];
-        });
-  }
-
-  void waiterMenu(String username, String table) {
+  void _openMenu(String ownerId, String tableName) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (ctx) => WaiterMenuScreen(username: username, table: table),
+        builder: (_) => WaiterMenuScreen(
+          username: widget.username,
+          table: tableName,
+          ownerUserId: ownerId, // 👈 pass manager/owner id
+        ),
+      ),
+    );
+  }
+
+  void _openProfile(String ownerId) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => WaiterProfileScreen(
+          userId: ownerId,
+          waiterIdentifier: widget.username,
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        leading: StreamBuilder<Map<String, String?>>(
-          stream: getWaiterDetailsStream(widget.username),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError ||
-                !snapshot.hasData ||
-                snapshot.data == null ||
-                snapshot.data!['userId'] == null) {
-              return const Icon(Icons.error, color: Colors.white, size: 30);
-            }
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => WaiterLoginScreen()),
+        );
+        return false;
+      },
+      child: FutureBuilder<Map<String, String?>>(
+        future: _ownerInfoFuture,
+        builder: (context, snapshot) {
+          // Always white background
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              backgroundColor: Colors.white,
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
 
-            final userId = snapshot.data!['userId']!;
-            return IconButton(
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (ctx) => WaiterProfileScreen(
-                      userId: userId,
-                      waiterIdentifier: widget.username,
-                    ),
+          if (!snapshot.hasData || snapshot.data!['ownerId']!.isEmpty) {
+            return Scaffold(
+              backgroundColor: Colors.white,
+              appBar: AppBar(
+                backgroundColor: const Color.fromARGB(255, 230, 106, 4),
+                title: Text(
+                  widget.username,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
-                );
-              },
-              icon: const Icon(
-                Icons.account_circle,
-                color: Colors.white,
-                size: 30,
+                ),
+              ),
+              body: const Center(
+                child: Text('Waiter not linked with any manager user.'),
               ),
             );
-          },
-        ),
-        backgroundColor: const Color.fromARGB(255, 230, 106, 4),
-        title: StreamBuilder<Map<String, String?>>(
-          stream: getWaiterDetailsStream(widget.username),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const CircularProgressIndicator(color: Colors.white);
-            }
-            if (snapshot.hasError ||
-                !snapshot.hasData ||
-                snapshot.data == null ||
-                snapshot.data!['fullName'] == null) {
-              return Text(
-                widget.username,
+          }
+
+          final ownerId = snapshot.data!['ownerId']!;
+          final fullName = snapshot.data!['fullName']!;
+
+          return Scaffold(
+            backgroundColor: Colors.white,
+            appBar: AppBar(
+              backgroundColor: const Color.fromARGB(255, 230, 106, 4),
+              leading: IconButton(
+                icon: const Icon(
+                  Icons.account_circle,
+                  color: Colors.white,
+                  size: 30,
+                ),
+                onPressed: () => _openProfile(ownerId),
+              ),
+              title: Text(
+                fullName,
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
                 ),
-              );
-            }
-
-            final fullName = snapshot.data!['fullName']!;
-            return Text(
-              fullName,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
               ),
-            );
-          },
-        ),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(10),
-        child: StreamBuilder<Map<String, String?>>(
-          stream: getWaiterDetailsStream(widget.username),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError ||
-                !snapshot.hasData ||
-                snapshot.data == null ||
-                snapshot.data!['userId'] == null) {
-              return const Center(child: Text('User not found.'));
-            }
+            ),
+            body: Padding(
+              padding: const EdgeInsets.all(10),
+              child: StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(ownerId)
+                    .snapshots(),
+                builder: (context, tableSnap) {
+                  if (tableSnap.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (!tableSnap.hasData || !tableSnap.data!.exists) {
+                    return const Center(child: Text('No tables found.'));
+                  }
 
-            final userId = snapshot.data!['userId']!;
-            return StreamBuilder<List<String>>(
-              stream: getTablesStream(userId),
-              builder: (context, tableSnapshot) {
-                if (tableSnapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (tableSnapshot.hasError ||
-                    !tableSnapshot.hasData ||
-                    tableSnapshot.data!.isEmpty) {
-                  return const Center(child: Text('No tables found.'));
-                }
+                  final data =
+                      tableSnap.data!.data() as Map<String, dynamic>? ?? {};
+                  final tables = List<String>.from(
+                    data['tables'] as List? ?? const [],
+                  );
 
-                final tables = tableSnapshot.data!;
-                return ListView.builder(
-                  itemCount: tables.length,
-                  itemBuilder: (context, index) {
-                    return TextButton(
-                      onPressed: () {
-                        waiterMenu(widget.username, tables[index]);
-                      },
-                      style: TextButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.table_chart,
-                            color: Color.fromARGB(255, 90, 57, 44),
-                            size: 30,
+                  if (tables.isEmpty) {
+                    return const Center(child: Text('No tables found.'));
+                  }
+
+                  return ListView.builder(
+                    itemCount: tables.length,
+                    itemBuilder: (context, index) {
+                      final tableName = tables[index];
+                      return TextButton(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 4,
+                            horizontal: 8,
                           ),
-                          const SizedBox(width: 10),
-                          Text(
-                            tables[index],
-                            style: const TextStyle(
-                              fontSize: 25,
-                              fontWeight: FontWeight.bold,
+                          backgroundColor: Colors.transparent,
+                        ),
+                        onPressed: () => _openMenu(ownerId, tableName),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.table_chart,
                               color: Color.fromARGB(255, 90, 57, 44),
+                              size: 30,
                             ),
-                          ),
-                          const SizedBox(height: 35),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            );
-          },
-        ),
+                            const SizedBox(width: 10),
+                            Text(
+                              tableName,
+                              style: const TextStyle(
+                                fontSize: 25,
+                                fontWeight: FontWeight.bold,
+                                color: Color.fromARGB(255, 90, 57, 44),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          );
+        },
       ),
     );
   }

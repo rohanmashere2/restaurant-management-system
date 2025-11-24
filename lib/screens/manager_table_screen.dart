@@ -75,6 +75,22 @@ class ManagerTableScreenState extends ConsumerState<ManagerTableScreen> {
                   children: [
                     ElevatedButton(
                       onPressed: () {
+                        Navigator.of(ctx).pop();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Color.fromARGB(255, 230, 106, 4),
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: GoogleFonts.lato(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 10),
+                    ElevatedButton(
+                      onPressed: () {
                         removeTable(context, tableName);
                         Navigator.of(ctx).pop();
                       },
@@ -83,20 +99,10 @@ class ManagerTableScreenState extends ConsumerState<ManagerTableScreen> {
                       ),
                       child: Text(
                         'Remove',
-                        style: GoogleFonts.lato(color: Colors.white),
-                      ),
-                    ),
-                    SizedBox(width: 10),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.of(ctx).pop();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Color.fromARGB(255, 230, 106, 4),
-                      ),
-                      child: Text(
-                        'Cancel',
-                        style: GoogleFonts.lato(color: Colors.white),
+                        style: GoogleFonts.lato(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],
@@ -161,7 +167,11 @@ class ManagerTableScreenState extends ConsumerState<ManagerTableScreen> {
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.add, color: Colors.white),
+            icon: Icon(
+              Icons.add,
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
             onPressed: () => addTable(context),
           ),
         ],
@@ -183,7 +193,12 @@ class ManagerTableScreenState extends ConsumerState<ManagerTableScreen> {
           }
           final tables = List.from(snapshot.data!.data()?['tables'] ?? []);
           if (tables.isEmpty) {
-            return Center(child: Text('No tables found.'));
+            return Center(
+              child: Text(
+                'No tables found.',
+                style: GoogleFonts.lato(color: Colors.black),
+              ),
+            );
           }
 
           return ListView.builder(

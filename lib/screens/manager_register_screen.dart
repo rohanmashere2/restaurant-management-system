@@ -22,11 +22,12 @@ class ManagerRegisterScreenState extends ConsumerState<ManagerRegisterScreen> {
   bool _passwordVisible = false;
   bool _confirmPasswordVisible = false;
   String? _password;
-  var _enteredName = '';
+  var _enteredRestaurantName = '';
   var _enteredAddress = '';
   var _enteredNumber = '';
   var _enteredEmail = '';
   var _enteredPassword = '';
+  var _enteredOwnerName = '';
 
   Future<void> registerSubmit() async {
     final isValid = _formKey.currentState!.validate();
@@ -60,7 +61,8 @@ class ManagerRegisterScreenState extends ConsumerState<ManagerRegisterScreen> {
         'Address': _enteredAddress,
         'Email': _enteredEmail,
         'Mobile No': _enteredNumber,
-        'Restaurant Name': _enteredName,
+        'Restaurant Name': _enteredRestaurantName,
+        'Owner Name': _enteredOwnerName,
         'uid': userCredentials.user!.uid,
       });
 
@@ -103,168 +105,193 @@ class ManagerRegisterScreenState extends ConsumerState<ManagerRegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          FocusScope.of(context).unfocus();
-        },
-        child: Center(
-          child: SingleChildScrollView(
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  children: [
-                    Text(
-                      'Register',
-                      style: GoogleFonts.lato(
-                        fontSize: 40,
-                        color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Add your details to register',
-                      style: GoogleFonts.poppins(
-                        color: const Color.fromARGB(255, 73, 67, 67),
-                        fontWeight: FontWeight.w300,
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-
-                    _buildInputRow(
-                      icon: Icons.account_circle_outlined,
-                      label: 'Restaurant Name',
-                      validator: (value) =>
-                          value!.isEmpty ? 'Please enter the name.' : null,
-                      onSaved: (value) => _enteredName = value!.trim(),
-                    ),
-
-                    _buildInputRow(
-                      icon: Icons.mobile_friendly,
-                      label: 'Mobile Number',
-                      keyboardType: TextInputType.number,
-                      validator: (value) {
-                        if (value == null ||
-                            !RegExp(r'^[0-9]{10}$').hasMatch(value.trim())) {
-                          return 'Please enter a valid number.';
-                        }
-                        return null;
-                      },
-                      onSaved: (value) => _enteredNumber = value!.trim(),
-                    ),
-
-                    _buildInputRow(
-                      icon: Icons.email_outlined,
-                      label: 'Email Address',
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (value) {
-                        if (value == null ||
-                            value.trim().isEmpty ||
-                            !value.contains('@')) {
-                          return 'Please enter a valid email address.';
-                        }
-                        return null;
-                      },
-                      onSaved: (value) => _enteredEmail = value!.trim(),
-                    ),
-
-                    // Address
-                    _buildInputRow(
-                      icon: Icons.add_home_outlined,
-                      label: 'Address',
-                      validator: (value) => value!.isEmpty
-                          ? 'Please enter a valid address.'
-                          : null,
-                      onSaved: (value) => _enteredAddress = value!.trim(),
-                    ),
-
-                    _buildPasswordRow(
-                      label: 'Password',
-                      isVisible: _passwordVisible,
-                      toggleVisibility: () {
-                        setState(() => _passwordVisible = !_passwordVisible);
-                      },
-                      validator: (value) {
-                        _password = value;
-                        if (value == null || value.length < 6) {
-                          return 'Password must be at least 6 characters long.';
-                        }
-                        return null;
-                      },
-                    ),
-
-                    _buildPasswordRow(
-                      label: 'Confirm Password',
-                      isVisible: _confirmPasswordVisible,
-                      toggleVisibility: () {
-                        setState(
-                          () => _confirmPasswordVisible =
-                              !_confirmPasswordVisible,
-                        );
-                      },
-                      validator: (value) {
-                        if (value == null || value != _password) {
-                          return "Password doesn't match.";
-                        }
-                        return null;
-                      },
-                      onSaved: (value) => _enteredPassword = value!.trim(),
-                    ),
-
-                    const SizedBox(height: 40),
-                    ElevatedButton(
-                      onPressed: registerSubmit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color.fromARGB(255, 249, 111, 5),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 110,
-                          vertical: 10,
-                        ),
-                      ),
-                      child: Text(
+    return WillPopScope(
+      onWillPop: () async {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => ManagerLoginScreen()),
+        );
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            FocusScope.of(context).unfocus();
+          },
+          child: Center(
+            child: SingleChildScrollView(
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      Text(
                         'Register',
                         style: GoogleFonts.lato(
-                          fontSize: 20,
-                          color: Colors.white,
+                          fontSize: 40,
+                          color: Colors.black,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (ctx) => const ManagerLoginScreen(),
-                          ),
-                        );
-                      },
-                      child: RichText(
-                        text: TextSpan(
-                          text: "Already have an Account? ",
-                          style: GoogleFonts.poppins(
-                            color: Color.fromARGB(255, 87, 83, 79),
-                            fontSize: 15,
-                          ),
-                          children: [
-                            TextSpan(
-                              text: 'Login',
-                              style: GoogleFonts.poppins(
-                                color: Color.fromARGB(255, 255, 123, 7),
-                                fontSize: 15,
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                          ],
+                      const SizedBox(height: 4),
+                      Text(
+                        'Add your details to register',
+                        style: GoogleFonts.poppins(
+                          color: const Color.fromARGB(255, 73, 67, 67),
+                          fontWeight: FontWeight.w300,
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 15),
+
+                      _buildInputRow(
+                        icon: Icons.account_circle_outlined,
+                        label: 'Restaurant Name',
+                        validator: (value) => value!.isEmpty
+                            ? 'Please enter the Restaurant name.'
+                            : null,
+                        onSaved: (value) =>
+                            _enteredRestaurantName = value!.trim(),
+                      ),
+
+                      _buildInputRow(
+                        icon: Icons.account_circle_outlined,
+                        label: 'Owner Name',
+                        validator: (value) => value!.isEmpty
+                            ? 'Please enter the Owner name.'
+                            : null,
+                        onSaved: (value) => _enteredOwnerName = value!.trim(),
+                      ),
+
+                      _buildInputRow(
+                        icon: Icons.mobile_friendly,
+                        label: 'Mobile Number',
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          if (value == null ||
+                              !RegExp(r'^[0-9]{10}$').hasMatch(value.trim())) {
+                            return 'Please enter a valid number.';
+                          }
+                          return null;
+                        },
+                        onSaved: (value) => _enteredNumber = value!.trim(),
+                      ),
+
+                      _buildInputRow(
+                        icon: Icons.email_outlined,
+                        label: 'Email Address',
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (value) {
+                          if (value == null ||
+                              value.trim().isEmpty ||
+                              !value.contains('@')) {
+                            return 'Please enter a valid email address.';
+                          }
+                          return null;
+                        },
+                        onSaved: (value) => _enteredEmail = value!.trim(),
+                      ),
+
+                      // Address
+                      _buildInputRow(
+                        icon: Icons.add_home_outlined,
+                        label: 'Address',
+                        validator: (value) => value!.isEmpty
+                            ? 'Please enter a valid address.'
+                            : null,
+                        onSaved: (value) => _enteredAddress = value!.trim(),
+                      ),
+
+                      _buildPasswordRow(
+                        label: 'Password',
+                        isVisible: _passwordVisible,
+                        toggleVisibility: () {
+                          setState(() => _passwordVisible = !_passwordVisible);
+                        },
+                        validator: (value) {
+                          _password = value;
+                          if (value == null || value.length < 6) {
+                            return 'Password must be at least 6 characters long.';
+                          }
+                          return null;
+                        },
+                      ),
+
+                      _buildPasswordRow(
+                        label: 'Confirm Password',
+                        isVisible: _confirmPasswordVisible,
+                        toggleVisibility: () {
+                          setState(
+                            () => _confirmPasswordVisible =
+                                !_confirmPasswordVisible,
+                          );
+                        },
+                        validator: (value) {
+                          if (value == null || value != _password) {
+                            return "Password doesn't match.";
+                          }
+                          return null;
+                        },
+                        onSaved: (value) => _enteredPassword = value!.trim(),
+                      ),
+
+                      const SizedBox(height: 40),
+                      ElevatedButton(
+                        onPressed: registerSubmit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color.fromARGB(
+                            255,
+                            249,
+                            111,
+                            5,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 110,
+                            vertical: 10,
+                          ),
+                        ),
+                        child: Text(
+                          'Register',
+                          style: GoogleFonts.lato(
+                            fontSize: 20,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (ctx) => const ManagerLoginScreen(),
+                            ),
+                          );
+                        },
+                        child: RichText(
+                          text: TextSpan(
+                            text: "Already have an Account? ",
+                            style: GoogleFonts.poppins(
+                              color: Color.fromARGB(255, 87, 83, 79),
+                              fontSize: 15,
+                            ),
+                            children: [
+                              TextSpan(
+                                text: 'Login',
+                                style: GoogleFonts.poppins(
+                                  color: Color.fromARGB(255, 255, 123, 7),
+                                  fontSize: 15,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

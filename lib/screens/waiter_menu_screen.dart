@@ -1,142 +1,119 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:restaurant_management/screens/waiter_checkout_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:restaurant_management/screens/waiter_checkout_screen.dart';
 
 class WaiterMenuScreen extends StatefulWidget {
   const WaiterMenuScreen({
     super.key,
     required this.username,
     required this.table,
+    required this.ownerUserId,
   });
 
   final String username;
   final String table;
+  final String ownerUserId;
+
   @override
-  State<StatefulWidget> createState() {
-    return WaiterMenuScreenState();
-  }
+  State<WaiterMenuScreen> createState() => _WaiterMenuScreenState();
 }
 
-class WaiterMenuScreenState extends State<WaiterMenuScreen> {
+class _WaiterMenuScreenState extends State<WaiterMenuScreen> {
   String searchQuery = "";
-  Map<String, bool> expandedCategory = {};
-  Map<String, Map<String, bool>> expandedSubcategory = {};
+  Map<String, dynamic> fullMenu = {}; // store menu locally
+  bool isLoading = true;
 
-  Stream<String?> getUserIdByUsernameStream(String username) {
-    return FirebaseFirestore.instance.collection('users').snapshots().map((
-      snapshot,
-    ) {
-      for (var userDoc in snapshot.docs) {
-        final userData = userDoc.data();
-        final waiters = userData['waiters'] as List<dynamic>;
+  // store expanded state
+  final Map<String, bool> expandedCategory = {};
+  final Map<String, Map<String, bool>> expandedSubcategory = {};
 
-        for (var waiter in waiters) {
-          if (waiter['username'] == username) {
-            return userDoc.id;
-          }
-        }
-      }
-      return null;
-    });
+  @override
+  void initState() {
+    super.initState();
+    loadMenu();
   }
 
-  Stream<Map<String, dynamic>> getMenuByUserIdStream(String userId) {
-    return FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .snapshots()
-        .map((snapshot) {
-          if (snapshot.exists) {
-            final userData = snapshot.data() as Map<String, dynamic>;
-            return userData['menu'] ?? {};
-          }
-          return {};
-        });
+  Future<void> loadMenu() async {
+    final snap = await FirebaseFirestore.instance
+        .collection("users")
+        .doc(widget.ownerUserId)
+        .get();
+
+    final data = snap.data() as Map<String, dynamic>? ?? {};
+    fullMenu = Map<String, dynamic>.from(data["menu"] ?? {});
+
+    setState(() => isLoading = false);
   }
 
-  void addToOrder(
-    String table,
-    String category,
-    Map<String, dynamic> item,
-  ) async {
+  Future<void> addToOrder({
+    required String category,
+    required Map<String, dynamic> item,
+  }) async {
     try {
-      final userId = await getUserIdByUsernameStream(widget.username).first;
-      if (userId == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('User not found for username: ${widget.username}'),
-          ),
-        );
-        return;
-      }
+      final docRef = FirebaseFirestore.instance
+          .collection("users")
+          .doc(widget.ownerUserId);
 
-      final userDocRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId);
-      final userDocSnapshot = await userDocRef.get();
-      Map<String, dynamic> currentAddMenu = {};
-      Map<String, dynamic> currentTotalBill = {};
+      final snap = await docRef.get();
+      final data = snap.data() as Map<String, dynamic>? ?? {};
 
-      if (userDocSnapshot.exists) {
-        final rawAddMenu = userDocSnapshot.data()?['add_menu'];
-        final rawTotalBill = userDocSnapshot.data()?['total_bill'];
-
-        if (rawAddMenu != null && rawAddMenu is Map) {
-          currentAddMenu = Map<String, dynamic>.from(rawAddMenu);
-        }
-        if (rawTotalBill != null && rawTotalBill is Map) {
-          currentTotalBill = Map<String, dynamic>.from(rawTotalBill);
-        }
-      }
-      final tableOrders = List<Map<String, dynamic>>.from(
-        currentAddMenu[table] ?? [],
+      Map<String, dynamic> addMenu = Map<String, dynamic>.from(
+        data["add_menu"] ?? {},
       );
-      final itemIndex = tableOrders.indexWhere(
-        (order) =>
-            order['name'] == item['name'] && order['category'] == category,
+      Map<String, dynamic> totalBill = Map<String, dynamic>.from(
+        data["total_bill"] ?? {},
       );
 
-      if (itemIndex >= 0) {
-        tableOrders[itemIndex]['quantity'] += 1;
+      List<Map<String, dynamic>> tableOrders = List<Map<String, dynamic>>.from(
+        addMenu[widget.table] ?? [],
+      );
+
+      int index = tableOrders.indexWhere(
+        (o) => o["name"] == item["name"] && o["category"] == category,
+      );
+
+      if (index >= 0) {
+        tableOrders[index]["quantity"]++;
       } else {
         tableOrders.add({
-          'name': item['name'],
-          'price': item['price'],
-          'quantity': 1,
-          'category': category,
+          "name": item["name"],
+          "price": item["price"],
+          "quantity": 1,
+          "category": category,
         });
       }
 
-      double totalBill = 0;
-      for (var order in tableOrders) {
-        totalBill += order['price'] * order['quantity'];
+      double total = 0;
+      for (var o in tableOrders) {
+        total += (o["price"] as num) * (o["quantity"] as num);
       }
 
-      currentAddMenu[table] = tableOrders;
-      currentTotalBill[table] = totalBill;
+      addMenu[widget.table] = tableOrders;
+      totalBill[widget.table] = total;
 
-      await userDocRef.update({
-        'add_menu': currentAddMenu,
-        'total_bill': currentTotalBill,
-      });
+      await docRef.update({"add_menu": addMenu, "total_bill": totalBill});
 
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Item is Added.')));
+      ).showSnackBar(const SnackBar(content: Text("Item Added")));
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Failed to add item: $e')));
+      ).showSnackBar(SnackBar(content: Text("Error adding item")));
     }
   }
 
-  void checkout() {
-    Navigator.of(context).push(
+  void goToCheckout() {
+    Navigator.push(
+      context,
       MaterialPageRoute(
-        builder: (ctx) => WaiterCheckoutScreen(
+        builder: (_) => WaiterCheckoutScreen(
           username: widget.username,
           table: widget.table,
+          ownerUserId: widget.ownerUserId,
         ),
       ),
     );
@@ -146,186 +123,141 @@ class WaiterMenuScreenState extends State<WaiterMenuScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+
       appBar: AppBar(
+        backgroundColor: const Color.fromARGB(255, 230, 106, 4),
         title: TextField(
+          onChanged: (v) => setState(() => searchQuery = v.toLowerCase()),
           decoration: InputDecoration(
             hintText: "${widget.table} search...",
-            icon: Icon(Icons.search, color: Colors.white),
+            border: InputBorder.none,
+            icon: const Icon(Icons.search, color: Colors.white),
             hintStyle: GoogleFonts.lato(
               fontSize: 20,
-              color: Color.fromARGB(232, 255, 255, 255),
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
             ),
-            border: InputBorder.none,
           ),
           style: const TextStyle(color: Colors.white, fontSize: 18),
-          onChanged: (value) {
-            setState(() {
-              searchQuery = value.toLowerCase();
-            });
-          },
         ),
-        backgroundColor: const Color.fromARGB(255, 230, 106, 4),
         actions: [
           IconButton(
-            onPressed: checkout,
             icon: const Icon(Icons.shopping_cart, color: Colors.white),
-            tooltip: 'Checkout',
+            onPressed: goToCheckout,
           ),
         ],
       ),
-      body: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () {
-          FocusScope.of(context).unfocus();
-        },
-        child: StreamBuilder<String?>(
-          stream: getUserIdByUsernameStream(widget.username),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : buildMenuList(),
+    );
+  }
+
+  Widget buildMenuList() {
+    return ListView(
+      children: fullMenu.keys.map((category) {
+        final subcats = fullMenu[category] as Map<String, dynamic>;
+
+        expandedCategory.putIfAbsent(category, () => false);
+
+        // filter category — do not hide instantly
+        bool categoryHasMatch = subcats.values.any((list) {
+          if (list is! List) return false;
+          return list.any(
+            (item) =>
+                item["name"].toString().toLowerCase().contains(searchQuery),
+          );
+        });
+
+        if (!categoryHasMatch && searchQuery.isNotEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return ExpansionTile(
+          maintainState: true,
+          initiallyExpanded: searchQuery.isNotEmpty
+              ? true
+              : expandedCategory[category]!,
+          onExpansionChanged: (v) {
+            if (searchQuery.isEmpty) {
+              setState(() => expandedCategory[category] = v);
             }
-            if (!snapshot.hasData || snapshot.data == null) {
-              return const Center(child: Text('User not found.'));
-            }
-
-            final userId = snapshot.data!;
-            return StreamBuilder<Map<String, dynamic>>(
-              stream: getMenuByUserIdStream(userId),
-              builder: (context, menuSnapshot) {
-                if (menuSnapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (!menuSnapshot.hasData || menuSnapshot.data!.isEmpty) {
-                  return const Center(child: Text('No menu found.'));
-                }
-
-                final menu = menuSnapshot.data!;
-                return ListView(
-                  children: menu.keys.map((category) {
-                    final subcategories =
-                        menu[category] as Map<String, dynamic>;
-                    // Track whether the category is expanded or not
-                    expandedCategory[category] =
-                        expandedCategory[category] ?? false;
-
-                    return ExpansionTile(
-                      title: Text(
-                        category.toUpperCase(),
-                        style: GoogleFonts.lato(
-                          fontSize: 23,
-                          fontWeight: FontWeight.bold,
-                          color: const Color.fromARGB(255, 90, 57, 44),
-                        ),
-                      ),
-                      onExpansionChanged: (expanded) {
-                        setState(() {
-                          expandedCategory[category] = expanded;
-                        });
-                      },
-                      initiallyExpanded: expandedCategory[category]!,
-                      children: subcategories.keys.map((subcat) {
-                        final items = List<Map<String, dynamic>>.from(
-                          subcategories[subcat],
-                        );
-                        items.sort(
-                          (a, b) => (a['name'] as String).compareTo(
-                            b['name'] as String,
-                          ),
-                        );
-
-                        final filteredItems = items.where((item) {
-                          final itemName = (item['name'] as String)
-                              .toLowerCase();
-                          return itemName.contains(searchQuery);
-                        }).toList();
-
-                        if (filteredItems.isEmpty) {
-                          return Container();
-                        }
-                        expandedSubcategory[category] ??= {};
-                        expandedSubcategory[category]![subcat] =
-                            expandedSubcategory[category]![subcat] ?? false;
-
-                        return ExpansionTile(
-                          title: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: const BoxDecoration(
-                              color: Colors.orange,
-                            ),
-                            child: Text(
-                              subcat,
-                              style: GoogleFonts.lato(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                          onExpansionChanged: (expanded) {
-                            setState(() {
-                              expandedSubcategory[category]![subcat] = expanded;
-                            });
-                          },
-                          initiallyExpanded:
-                              expandedSubcategory[category]![subcat]!,
-                          children: filteredItems.map((item) {
-                            return Container(
-                              color: Colors.white,
-                              child: ListTile(
-                                title: Text(
-                                  item['name'],
-                                  style: GoogleFonts.lato(
-                                    fontSize: 19,
-                                    color: const Color.fromARGB(
-                                      255,
-                                      90,
-                                      57,
-                                      44,
-                                    ),
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                subtitle: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      'Rs ${item['price']}',
-                                      style: GoogleFonts.lato(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w400,
-                                        color: const Color.fromARGB(
-                                          255,
-                                          90,
-                                          57,
-                                          44,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 20),
-                                  ],
-                                ),
-                                trailing: IconButton(
-                                  icon: const Icon(
-                                    Icons.add,
-                                    size: 35,
-                                    color: Color.fromARGB(255, 90, 57, 44),
-                                  ),
-                                  onPressed: () =>
-                                      addToOrder(widget.table, category, item),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        );
-                      }).toList(),
-                    );
-                  }).toList(),
-                );
-              },
-            );
           },
-        ),
-      ),
+          title: Text(
+            category.toUpperCase(),
+            style: GoogleFonts.lato(
+              fontSize: 23,
+              fontWeight: FontWeight.bold,
+              color: Colors.brown,
+            ),
+          ),
+          children: subcats.keys.map((subcat) {
+            final list = subcats[subcat];
+            if (list is! List) return const SizedBox.shrink();
+
+            final items = list
+                .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e))
+                .toList();
+
+            final filtered = items.where((i) {
+              final name = i["name"].toString().toLowerCase();
+              return searchQuery.isEmpty || name.contains(searchQuery);
+            }).toList();
+
+            if (filtered.isEmpty) return const SizedBox.shrink();
+
+            expandedSubcategory.putIfAbsent(category, () => {});
+            expandedSubcategory[category]!.putIfAbsent(subcat, () => false);
+
+            return ExpansionTile(
+              maintainState: true,
+              initiallyExpanded: searchQuery.isNotEmpty
+                  ? true
+                  : expandedSubcategory[category]![subcat]!,
+              onExpansionChanged: (v) {
+                if (searchQuery.isEmpty) {
+                  setState(() {
+                    expandedSubcategory[category]![subcat] = v;
+                  });
+                }
+              },
+              title: Container(
+                padding: const EdgeInsets.all(10),
+                color: Colors.orange,
+                child: Text(
+                  subcat,
+                  style: GoogleFonts.lato(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              children: filtered.map((item) {
+                return ListTile(
+                  title: Text(
+                    item["name"],
+                    style: GoogleFonts.lato(
+                      fontSize: 19,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.brown,
+                    ),
+                  ),
+                  subtitle: Text(
+                    "Rs ${item["price"]}",
+                    style: GoogleFonts.lato(fontSize: 15, color: Colors.brown),
+                  ),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.add, size: 32, color: Colors.brown),
+                    onPressed: () => addToOrder(category: category, item: item),
+                  ),
+                );
+              }).toList(),
+            );
+          }).toList(),
+        );
+      }).toList(),
     );
   }
 }
