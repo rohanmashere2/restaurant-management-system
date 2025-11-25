@@ -80,16 +80,30 @@ class ManagerWaiterViewState extends State<ManagerWaiterView> {
 
   Future<void> _removeWaiter(BuildContext context) async {
     try {
-      await FirebaseFirestore.instance
+      var userDocRef = FirebaseFirestore.instance
           .collection('users')
-          .doc(widget.userId)
-          .update({
-            'waiters': FieldValue.arrayRemove([widget.waiter.toMap()]),
-          });
+          .doc(widget.userId);
+
+      var snapshot = await userDocRef.get();
+
+      if (!snapshot.exists) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('User data not found')));
+        return;
+      }
+
+      List waitersList = snapshot.data()?['waiters'] ?? [];
+
+      // Remove waiter by matching username
+      waitersList.removeWhere((w) => w['username'] == widget.waiter.username);
+
+      await userDocRef.update({'waiters': waitersList});
 
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Waiter removed successfully')));
+
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(
