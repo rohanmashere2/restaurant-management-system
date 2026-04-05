@@ -18,6 +18,8 @@ class MenuAddScreenState extends State<MenuAddScreen> {
 
   String? _category;
   String? _subCategory;
+  bool _itemAvailable = true;
+
   final Map<String, List<String>> _categories = {
     'Veg': ['Starters', 'Main Menu', 'Rice & Biryani', 'Roti', 'Cold Drinks'],
     'Non-Veg': [
@@ -83,6 +85,7 @@ class MenuAddScreenState extends State<MenuAddScreen> {
           setState(() {
             _category = null;
             _subCategory = null;
+            _itemAvailable = true;
           });
           Navigator.of(context).pop();
         } catch (e) {
@@ -177,6 +180,29 @@ class MenuAddScreenState extends State<MenuAddScreen> {
                         ),
                       ),
                     ],
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    secondary: Icon(
+                      _itemAvailable ? Icons.restaurant : Icons.block,
+                      color: Color.fromARGB(255, 90, 57, 44),
+                    ),
+                    title: Text(
+                      'Available on waiter menu',
+                      style: GoogleFonts.lato(
+                        fontSize: 16,
+                        color: Color.fromARGB(255, 90, 57, 44),
+                      ),
+                    ),
+                    subtitle: Text(
+                      'Turn off to mark 86 / sold out (still visible to manager).',
+                      style: GoogleFonts.lato(
+                        fontSize: 12,
+                        color: Color.fromARGB(255, 140, 93, 74),
+                      ),
+                    ),
+                    value: _itemAvailable,
+                    onChanged: (bool v) => setState(() => _itemAvailable = v),
                   ),
                   SizedBox(height: 10),
                   DropdownButtonFormField<String>(

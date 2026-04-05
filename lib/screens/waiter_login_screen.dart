@@ -5,6 +5,7 @@ import 'package:restaurant_management/screens/waiter_home_screen.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:restaurant_management/services/waiter_device_registry.dart';
 
 class WaiterLoginScreen extends StatefulWidget {
   const WaiterLoginScreen({super.key});
@@ -55,6 +56,17 @@ class WaiterLoginScreenState extends State<WaiterLoginScreen> {
             var waiter = waiters[i];
             if (waiter['username'] == _enteredUserName &&
                 waiter['password'] == _enteredPassword) {
+              if (waiter['active'] == false) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'This account is deactivated. Ask your manager.',
+                    ),
+                  ),
+                );
+                return;
+              }
               loginSuccess = true;
               userDocument = userDoc;
               waiterIndex = i;
@@ -66,26 +78,37 @@ class WaiterLoginScreenState extends State<WaiterLoginScreen> {
       }
 
       if (loginSuccess) {
+        final doc = userDocument!;
+        final wi = waiterIndex!;
         final deviceCode = await getDeviceCode();
 
-        List<dynamic> waiters =
-            (userDocument!.data() as Map<String, dynamic>)['waiters'];
+        List<dynamic> waiters = (doc.data() as Map<String, dynamic>)['waiters'];
 
-        waiters[waiterIndex!]['active'] = true;
-        waiters[waiterIndex]['deviceCode'] = deviceCode;
+        waiters[wi]['active'] = true;
+        waiters[wi]['deviceCode'] = deviceCode;
 
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userDocument.id)
-            .set({'waiters': waiters}, SetOptions(merge: true));
+        await FirebaseFirestore.instance.collection('users').doc(doc.id).set({
+          'waiters': waiters,
+        }, SetOptions(merge: true));
 
+        await WaiterDeviceRegistry.upsert(
+          deviceCode: deviceCode,
+          ownerUserId: doc.id,
+          username: _enteredUserName,
+          active: true,
+        );
+
+        if (!mounted) return;
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Login Successful')));
 
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (ctx) => WaiterHomeScreen(username: _enteredUserName),
+            builder: (ctx) => WaiterHomeScreen(
+              username: _enteredUserName,
+              ownerUserId: doc.id,
+            ),
           ),
         );
       } else {

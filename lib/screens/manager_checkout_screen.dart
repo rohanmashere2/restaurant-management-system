@@ -23,6 +23,12 @@ class ManagerCheckoutScreenState extends State<ManagerCheckoutScreen> {
   final user = FirebaseAuth.instance.currentUser!;
   bool isGeneratingBill = false;
 
+  /// Gratuity percent (0, 5, 10, 15, …).
+  int _tipPercent = 0;
+
+  /// Display-only split (per-head share of grand total).
+  int _splitWays = 1;
+
   Future<Map<String, dynamic>> fetchOrderDetails(
     String userId,
     String table,
@@ -184,11 +190,23 @@ class ManagerCheckoutScreenState extends State<ManagerCheckoutScreen> {
       final cgst = totalBill * 0.0;
       final sgst = totalBill * 0.0;
       final serviceTax = totalBill * 0.0;
-      final grandTotal = totalBill + cgst + sgst + serviceTax;
+      final tipAmount = totalBill * _tipPercent / 100.0;
+      final grandTotal = totalBill + cgst + sgst + serviceTax + tipAmount;
       final user = FirebaseAuth.instance.currentUser;
 
       if (user != null) {
         await storeBillFor5Minutes(invoiceNumber, grandTotal);
+        await storeBillRecordInFirestore(
+          userId: user.uid,
+          invoiceNumber: invoiceNumber,
+          grandTotal: grandTotal,
+          subtotal: totalBill,
+          tipAmount: tipAmount,
+          tipPercent: _tipPercent,
+          splitWays: _splitWays,
+          table: widget.table,
+          orders: orders,
+        );
       }
       await clearTableData(user!.uid, widget.table);
 
@@ -199,6 +217,7 @@ class ManagerCheckoutScreenState extends State<ManagerCheckoutScreen> {
       final labels = [
         'Total Qty.',
         'Subtotal',
+        'Tip ($_tipPercent%)',
         'CGST',
         'SGST',
         'Service Tax',
@@ -211,6 +230,7 @@ class ManagerCheckoutScreenState extends State<ManagerCheckoutScreen> {
       final data = [
         totalQuantity,
         'Rs ${totalBill.toStringAsFixed(2)}',
+        'Rs ${tipAmount.toStringAsFixed(2)}',
         'Rs ${cgst.toStringAsFixed(2)}',
         'Rs ${sgst.toStringAsFixed(2)}',
         'Rs ${serviceTax.toStringAsFixed(2)}',
@@ -488,6 +508,13 @@ class ManagerCheckoutScreenState extends State<ManagerCheckoutScreen> {
                     ),
                   ],
                 ),
+                if (_splitWays > 1) ...[
+                  pw.SizedBox(height: 10),
+                  pw.Text(
+                    'Split $_splitWays ways: Rs ${(grandTotal / _splitWays).toStringAsFixed(2)} each',
+                    style: pw.TextStyle(fontSize: 14, font: latoRegular),
+                  ),
+                ],
                 pw.SizedBox(height: 40),
                 pw.Center(
                   child: pw.Text(
@@ -511,6 +538,36 @@ class ManagerCheckoutScreenState extends State<ManagerCheckoutScreen> {
         isGeneratingBill = false;
       });
     }
+  }
+
+  /// Duplicate of RTDB bill log for querying and future migration (Firestore).
+  Future<void> storeBillRecordInFirestore({
+    required String userId,
+    required String invoiceNumber,
+    required double grandTotal,
+    required double subtotal,
+    required double tipAmount,
+    required int tipPercent,
+    required int splitWays,
+    required String table,
+    required List<Map<String, dynamic>> orders,
+  }) async {
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('bill_records')
+        .add({
+      'invoice_no': invoiceNumber,
+      'total_bill': grandTotal,
+      'subtotal': subtotal,
+      'tip_percent': tipPercent,
+      'tip_amount': tipAmount,
+      'split_ways': splitWays,
+      'timestamp': ts,
+      'table': table,
+      'items': orders.map((e) => Map<String, dynamic>.from(e)).toList(),
+    });
   }
 
   Future<void> storeBillFor5Minutes(
@@ -656,13 +713,101 @@ class ManagerCheckoutScreenState extends State<ManagerCheckoutScreen> {
                       ],
                     );
                   }),
-                  Text(
-                    'Total Bill: Rs $totalBill',
-                    style: GoogleFonts.lato(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                  if (orders.isNotEmpty) ...[
+                    Text(
+                      'Tip',
+                      style: GoogleFonts.lato(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
+                    Wrap(
+                      spacing: 8,
+                      children: [0, 5, 10, 15].map((p) {
+                        return ChoiceChip(
+                          label: Text('$p%'),
+                          selected: _tipPercent == p,
+                          onSelected: (_) {
+                            setState(() => _tipPercent = p);
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Text(
+                          'Split bill (ways)',
+                          style: GoogleFonts.lato(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        DropdownButton<int>(
+                          value: _splitWays.clamp(1, 12),
+                          items: List.generate(
+                            12,
+                            (i) => DropdownMenuItem(
+                              value: i + 1,
+                              child: Text('${i + 1}'),
+                            ),
+                          ),
+                          onChanged: (v) {
+                            if (v != null) setState(() => _splitWays = v);
+                          },
+                        ),
+                      ],
+                    ),
+                    Builder(
+                      builder: (ctx) {
+                        final sub = (totalBill as num).toDouble();
+                        final tip = sub * _tipPercent / 100.0;
+                        final grand = sub + tip;
+                        final per = _splitWays > 0
+                            ? grand / _splitWays
+                            : grand;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 8),
+                            Text(
+                              'Subtotal: Rs ${sub.toStringAsFixed(2)}',
+                              style: GoogleFonts.lato(fontSize: 16),
+                            ),
+                            if (_tipPercent > 0)
+                              Text(
+                                'Tip ($_tipPercent%): Rs ${tip.toStringAsFixed(2)}',
+                                style: GoogleFonts.lato(fontSize: 16),
+                              ),
+                            Text(
+                              'Grand total: Rs ${grand.toStringAsFixed(2)}',
+                              style: GoogleFonts.lato(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            if (_splitWays > 1)
+                              Text(
+                                'Per person ($_splitWays): Rs ${per.toStringAsFixed(2)}',
+                                style: GoogleFonts.lato(
+                                  fontSize: 15,
+                                  color: Colors.brown,
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (orders.isEmpty)
+                    Text(
+                      'Total Bill: Rs $totalBill',
+                      style: GoogleFonts.lato(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   SizedBox(height: 20),
                 ],
               );

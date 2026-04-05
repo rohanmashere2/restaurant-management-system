@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:restaurant_management/models/waiter.dart';
+import 'package:restaurant_management/services/waiter_device_registry.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -23,6 +24,7 @@ class ManagerWaiterViewState extends State<ManagerWaiterView> {
   late String username;
   late String mobileNo;
   late String password;
+  late bool _accountActive;
 
   @override
   void initState() {
@@ -31,6 +33,62 @@ class ManagerWaiterViewState extends State<ManagerWaiterView> {
     username = widget.waiter.username;
     mobileNo = widget.waiter.mobileNo;
     password = widget.waiter.password;
+    _accountActive = widget.waiter.active;
+  }
+
+  Future<void> _setAccountActive(bool value) async {
+    try {
+      final userDocRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId);
+      final snapshot = await userDocRef.get();
+      if (!snapshot.exists) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('User data not found')));
+        return;
+      }
+
+      List<dynamic> waitersList = List.from(snapshot.data()?['waiters'] ?? []);
+      final index = waitersList.indexWhere(
+        (w) => w is Map && w['username'] == widget.waiter.username,
+      );
+      if (index == -1) return;
+
+      final row = Map<String, dynamic>.from(waitersList[index] as Map);
+      row['active'] = value;
+      waitersList[index] = row;
+
+      await userDocRef.update({'waiters': waitersList});
+
+      final deviceCode = row['deviceCode']?.toString();
+      if (!value) {
+        await WaiterDeviceRegistry.deactivateByDeviceCode(deviceCode);
+      } else if (deviceCode != null && deviceCode.isNotEmpty) {
+        await WaiterDeviceRegistry.upsert(
+          deviceCode: deviceCode,
+          ownerUserId: widget.userId,
+          username: widget.waiter.username,
+          active: true,
+        );
+      }
+
+      if (!mounted) return;
+      setState(() => _accountActive = value);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            value ? 'Waiter can sign in again' : 'Waiter sign-in disabled',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error updating status: $e')));
+    }
   }
 
   Future<void> _saveChanges(BuildContext context) async {
@@ -41,6 +99,7 @@ class ManagerWaiterViewState extends State<ManagerWaiterView> {
           username: username,
           mobileNo: mobileNo,
           password: password,
+          active: _accountActive,
         );
 
         var userDocRef = FirebaseFirestore.instance
@@ -57,7 +116,12 @@ class ManagerWaiterViewState extends State<ManagerWaiterView> {
           );
 
           if (index != -1) {
-            waitersList[index] = updatedWaiter.toMap();
+            final prev = Map<String, dynamic>.from(waitersList[index] as Map);
+            final merged = updatedWaiter.toMap();
+            if (prev['deviceCode'] != null) {
+              merged['deviceCode'] = prev['deviceCode'];
+            }
+            waitersList[index] = merged;
             await userDocRef.update({'waiters': waitersList});
 
             ScaffoldMessenger.of(context).showSnackBar(
@@ -94,6 +158,16 @@ class ManagerWaiterViewState extends State<ManagerWaiterView> {
       }
 
       List waitersList = snapshot.data()?['waiters'] ?? [];
+
+      Map<String, dynamic>? removed;
+      for (final w in waitersList) {
+        if (w is Map && w['username'] == widget.waiter.username) {
+          removed = Map<String, dynamic>.from(w);
+          break;
+        }
+      }
+      final deviceCode = removed?['deviceCode']?.toString();
+      await WaiterDeviceRegistry.deactivateByDeviceCode(deviceCode);
 
       // Remove waiter by matching username
       waitersList.removeWhere((w) => w['username'] == widget.waiter.username);
@@ -267,6 +341,30 @@ class ManagerWaiterViewState extends State<ManagerWaiterView> {
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    secondary: Icon(
+                      _accountActive ? Icons.check_circle : Icons.block,
+                      color: Color.fromARGB(255, 90, 57, 44),
+                    ),
+                    title: Text(
+                      'Account Active',
+                      style: GoogleFonts.lato(
+                        fontWeight: FontWeight.bold,
+                        color: Color.fromARGB(255, 90, 57, 44),
+                      ),
+                    ),
+                    subtitle: Text(
+                      'When off, this waiter cannot log in or use saved device login.',
+                      style: GoogleFonts.lato(
+                        fontSize: 12,
+                        color: Color.fromARGB(255, 16, 15, 15),
+                      ),
+                    ),
+                    value: _accountActive,
+                    onChanged: _setAccountActive,
                   ),
                   const SizedBox(height: 20),
                   Row(

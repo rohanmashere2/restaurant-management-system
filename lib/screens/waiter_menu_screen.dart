@@ -1,6 +1,9 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:restaurant_management/models/order_line_status.dart';
 import 'package:restaurant_management/screens/waiter_checkout_screen.dart';
 
 class WaiterMenuScreen extends StatefulWidget {
@@ -21,34 +24,152 @@ class WaiterMenuScreen extends StatefulWidget {
 
 class _WaiterMenuScreenState extends State<WaiterMenuScreen> {
   String searchQuery = "";
-  Map<String, dynamic> fullMenu = {}; // store menu locally
-  bool isLoading = true;
 
-  // store expanded state
+  // store expanded state (persists across stream rebuilds)
   final Map<String, bool> expandedCategory = {};
   final Map<String, Map<String, bool>> expandedSubcategory = {};
 
-  @override
-  void initState() {
-    super.initState();
-    loadMenu();
-  }
+  final _random = Random();
 
-  Future<void> loadMenu() async {
-    final snap = await FirebaseFirestore.instance
-        .collection("users")
-        .doc(widget.ownerUserId)
-        .get();
+  String _newLineId() =>
+      '${DateTime.now().microsecondsSinceEpoch}_${_random.nextInt(1 << 32)}';
 
-    final data = snap.data() as Map<String, dynamic>? ?? {};
-    fullMenu = Map<String, dynamic>.from(data["menu"] ?? {});
+  static String _lineNote(Map<String, dynamic> o) =>
+      (o['note'] ?? '').toString().trim();
 
-    setState(() => isLoading = false);
+  /// Items with `available: false` in Firestore are treated as 86'd (sold out).
+  static bool _itemAvailable(Map<String, dynamic> item) =>
+      item['available'] != false;
+
+  Future<void> _openAddSheet({
+    required String category,
+    required Map<String, dynamic> item,
+  }) async {
+    final noteController = TextEditingController();
+    int quantity = 1;
+
+    final added = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 16,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: StatefulBuilder(
+            builder: (ctx, setModal) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    item['name']?.toString() ?? 'Item',
+                    style: GoogleFonts.lato(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Rs ${item['price']}',
+                    style: GoogleFonts.lato(fontSize: 16, color: Colors.white),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Kitchen / guest note (optional)',
+                    style: GoogleFonts.lato(
+                      fontWeight: FontWeight.w600,
+                      color: const Color.fromARGB(255, 230, 106, 4),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: noteController,
+                    style: GoogleFonts.lato(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintStyle: GoogleFonts.lato(color: Colors.white),
+                      hintText: 'e.g. No onion, extra spicy',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      isDense: true,
+                    ),
+                    maxLines: 2,
+                    textCapitalization: TextCapitalization.sentences,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Text(
+                        'Quantity',
+                        style: GoogleFonts.lato(fontWeight: FontWeight.w600),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: quantity > 1
+                            ? () => setModal(() => quantity--)
+                            : null,
+                        icon: const Icon(Icons.remove_circle_outline),
+                      ),
+                      Text(
+                        '$quantity',
+                        style: GoogleFonts.lato(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => setModal(() => quantity++),
+                        icon: const Icon(Icons.add_circle_outline),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color.fromARGB(255, 230, 106, 4),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: Text(
+                      'Add to ${widget.table}',
+                      style: GoogleFonts.lato(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+
+    if (added == true && mounted) {
+      await addToOrder(
+        category: category,
+        item: item,
+        quantity: quantity,
+        note: noteController.text,
+      );
+    }
+    noteController.dispose();
   }
 
   Future<void> addToOrder({
     required String category,
     required Map<String, dynamic> item,
+    int quantity = 1,
+    String note = '',
   }) async {
     try {
       final docRef = FirebaseFirestore.instance
@@ -56,7 +177,7 @@ class _WaiterMenuScreenState extends State<WaiterMenuScreen> {
           .doc(widget.ownerUserId);
 
       final snap = await docRef.get();
-      final data = snap.data() as Map<String, dynamic>? ?? {};
+      final data = Map<String, dynamic>.from(snap.data() ?? {});
 
       Map<String, dynamic> addMenu = Map<String, dynamic>.from(
         data["add_menu"] ?? {},
@@ -69,19 +190,31 @@ class _WaiterMenuScreenState extends State<WaiterMenuScreen> {
         addMenu[widget.table] ?? [],
       );
 
+      final noteTrimmed = note.trim();
+
       int index = tableOrders.indexWhere(
-        (o) => o["name"] == item["name"] && o["category"] == category,
+        (o) =>
+            o["name"] == item["name"] &&
+            o["category"] == category &&
+            _lineNote(o) == noteTrimmed,
       );
 
       if (index >= 0) {
-        tableOrders[index]["quantity"]++;
+        final q = tableOrders[index]["quantity"];
+        tableOrders[index]["quantity"] = (q as num) + quantity;
       } else {
-        tableOrders.add({
+        final line = <String, dynamic>{
+          "lineId": _newLineId(),
           "name": item["name"],
           "price": item["price"],
-          "quantity": 1,
+          "quantity": quantity,
           "category": category,
-        });
+          "kitchenStatus": OrderLineStatus.queued,
+        };
+        if (noteTrimmed.isNotEmpty) {
+          line["note"] = noteTrimmed;
+        }
+        tableOrders.add(line);
       }
 
       double total = 0;
@@ -95,9 +228,15 @@ class _WaiterMenuScreenState extends State<WaiterMenuScreen> {
       await docRef.update({"add_menu": addMenu, "total_bill": totalBill});
 
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text("Item Added")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            noteTrimmed.isEmpty
+                ? "Added ${item['name']} × $quantity"
+                : "Added ${item['name']} × $quantity (with note)",
+          ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -119,11 +258,30 @@ class _WaiterMenuScreenState extends State<WaiterMenuScreen> {
     );
   }
 
+  int _cartCountFromData(Map<String, dynamic> data) {
+    final addMenu = data['add_menu'] ?? {};
+    final tableOrders = List<dynamic>.from(addMenu[widget.table] ?? []);
+    var n = 0;
+    for (final o in tableOrders) {
+      if (o is Map) {
+        n += (o['quantity'] as num?)?.toInt() ?? 0;
+      }
+    }
+    return n;
+  }
+
+  double _tableSubtotalFromData(Map<String, dynamic> data) {
+    final totalBill = data['total_bill'] ?? {};
+    final v = totalBill[widget.table];
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-
       appBar: AppBar(
         backgroundColor: const Color.fromARGB(255, 230, 106, 4),
         title: TextField(
@@ -141,20 +299,70 @@ class _WaiterMenuScreenState extends State<WaiterMenuScreen> {
           style: const TextStyle(color: Colors.white, fontSize: 18),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.shopping_cart, color: Colors.white),
-            onPressed: goToCheckout,
+          StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(widget.ownerUserId)
+                .snapshots(),
+            builder: (context, snap) {
+              final docData = snap.hasData
+                  ? (snap.data!.data() as Map<String, dynamic>? ?? {})
+                  : <String, dynamic>{};
+              final count = _cartCountFromData(docData);
+              final subtotal = _tableSubtotalFromData(docData);
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (subtotal > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Text(
+                        'Rs ${subtotal.toStringAsFixed(0)}',
+                        style: GoogleFonts.lato(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  Badge(
+                    isLabelVisible: count > 0,
+                    label: Text('$count'),
+                    child: IconButton(
+                      icon: const Icon(
+                        Icons.shopping_cart,
+                        color: Colors.white,
+                      ),
+                      onPressed: goToCheckout,
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
-
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : buildMenuList(),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.ownerUserId)
+            .snapshots(),
+        builder: (context, snap) {
+          if (snap.hasError) {
+            return Center(child: Text('Could not load menu: ${snap.error}'));
+          }
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final data = snap.data!.data() as Map<String, dynamic>? ?? {};
+          final fullMenu = Map<String, dynamic>.from(data['menu'] ?? {});
+          return buildMenuList(fullMenu);
+        },
+      ),
     );
   }
 
-  Widget buildMenuList() {
+  Widget buildMenuList(Map<String, dynamic> fullMenu) {
     return ListView(
       children: fullMenu.keys.map((category) {
         final subcats = fullMenu[category] as Map<String, dynamic>;
@@ -235,22 +443,80 @@ class _WaiterMenuScreenState extends State<WaiterMenuScreen> {
                 ),
               ),
               children: filtered.map((item) {
+                final available = _itemAvailable(item);
                 return ListTile(
-                  title: Text(
-                    item["name"],
-                    style: GoogleFonts.lato(
-                      fontSize: 19,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.brown,
-                    ),
+                  enabled: available,
+                  onLongPress: available
+                      ? () => addToOrder(
+                          category: category,
+                          item: item,
+                          quantity: 1,
+                          note: '',
+                        )
+                      : null,
+                  title: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item["name"],
+                          style: GoogleFonts.lato(
+                            fontSize: 19,
+                            fontWeight: FontWeight.bold,
+                            color: available ? Colors.brown : Colors.grey,
+                            decoration: available
+                                ? TextDecoration.none
+                                : TextDecoration.lineThrough,
+                          ),
+                        ),
+                      ),
+                      if (!available)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade100,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '86',
+                            style: GoogleFonts.lato(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.red.shade900,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   subtitle: Text(
                     "Rs ${item["price"]}",
-                    style: GoogleFonts.lato(fontSize: 15, color: Colors.brown),
+                    style: GoogleFonts.lato(
+                      fontSize: 15,
+                      color: available ? Colors.brown : Colors.grey,
+                    ),
                   ),
                   trailing: IconButton(
-                    icon: const Icon(Icons.add, size: 32, color: Colors.brown),
-                    onPressed: () => addToOrder(category: category, item: item),
+                    tooltip: available
+                        ? 'Tap: options · Long-press: quick add ×1'
+                        : 'Unavailable',
+                    icon: Icon(
+                      Icons.add_shopping_cart,
+                      size: 30,
+                      color: available ? Colors.brown : Colors.grey,
+                    ),
+                    onPressed: available
+                        ? () => _openAddSheet(category: category, item: item)
+                        : () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Item is marked unavailable (86).',
+                                ),
+                              ),
+                            );
+                          },
                   ),
                 );
               }).toList(),

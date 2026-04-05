@@ -105,6 +105,7 @@ class WaiterAddScreenState extends ConsumerState<WaiterAddScreen> {
         "mobile no": _enteredMobile,
         "username": _enteredUsername,
         "password": _enteredPassword,
+        "active": true,
       };
 
       waiters.add(newWaiter);

@@ -104,14 +104,35 @@ class ManagerWaiterScreenState extends ConsumerState<ManagerWaiterScreen> {
                       size: 30,
                     ),
                     SizedBox(width: 10),
-                    Text(
-                      waiter.name,
-                      style: GoogleFonts.lato(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w600,
-                        color: Color.fromARGB(255, 90, 57, 44),
+                    Expanded(
+                      child: Text(
+                        waiter.name,
+                        style: GoogleFonts.lato(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w600,
+                          color: Color.fromARGB(255, 90, 57, 44),
+                        ),
                       ),
                     ),
+                    if (!waiter.active)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'Inactive',
+                          style: GoogleFonts.lato(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
                 trailing: Icon(

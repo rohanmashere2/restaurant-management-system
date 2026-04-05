@@ -4,6 +4,7 @@ import 'package:restaurant_management/screens/manager_login_screen.dart';
 import 'package:restaurant_management/screens/manager_menu_screen.dart';
 import 'package:restaurant_management/screens/manager_profile_screen.dart';
 import 'package:restaurant_management/screens/manager_table_screen.dart';
+import 'package:restaurant_management/screens/kitchen_display_screen.dart';
 import 'package:restaurant_management/screens/manager_waiter_screen.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
@@ -54,6 +55,12 @@ class MainDrawer extends StatelessWidget {
     Navigator.of(
       context,
     ).push(MaterialPageRoute(builder: (ctx) => BillHistoryScreen()));
+  }
+
+  void kitchenDisplay(BuildContext context) {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (ctx) => const KitchenDisplayScreen()));
   }
 
   Future<String> getDeviceCode() async {
@@ -200,6 +207,21 @@ class MainDrawer extends StatelessWidget {
               ),
             ),
             onTap: () => history(context),
+          ),
+          ListTile(
+            leading: Icon(
+              Icons.restaurant,
+              size: 26,
+              color: Color.fromARGB(255, 90, 57, 44),
+            ),
+            title: Text(
+              'Kitchen Display',
+              style: GoogleFonts.poppins(
+                color: Color.fromARGB(255, 90, 57, 44),
+                fontSize: 22,
+              ),
+            ),
+            onTap: () => kitchenDisplay(context),
           ),
           ListTile(
             leading: Icon(

@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:restaurant_management/services/waiter_device_registry.dart';
 
 class SelectionScreen extends StatefulWidget {
   const SelectionScreen({super.key});
@@ -54,46 +55,94 @@ class SelectionScreenState extends State<SelectionScreen> {
 
   void waiter() async {
     try {
-      final userDocs = await FirebaseFirestore.instance
-          .collection('users')
+      final deviceCode = await getDeviceCode();
+      final docId = WaiterDeviceRegistry.docIdForDevice(deviceCode);
+      final regSnap = await FirebaseFirestore.instance
+          .collection(WaiterDeviceRegistry.collection)
+          .doc(docId)
           .get();
 
       String? loggedInWaiter;
-      final deviceCode = await getDeviceCode();
+      String? ownerUserId;
 
-      for (var userDoc in userDocs.docs) {
-        final userData = userDoc.data() as Map<String, dynamic>?;
-
-        if (userData != null && userData.containsKey('waiters')) {
-          final waiters = userData['waiters'] as List<dynamic>;
-
-          for (var waiter in waiters) {
-            // SAFE CHECKS — prevent crash
-            bool isActive = waiter['active'] ?? false;
-            String savedDevice = waiter['deviceCode'] ?? "";
-
-            if (isActive && savedDevice == deviceCode) {
-              loggedInWaiter = waiter['username'];
-              break;
-            }
+      if (regSnap.exists) {
+        final d = regSnap.data();
+        if (d != null && d['active'] == true) {
+          final u = d['username']?.toString();
+          final o = d['ownerUserId']?.toString();
+          if (u != null &&
+              u.isNotEmpty &&
+              o != null &&
+              o.isNotEmpty &&
+              await WaiterDeviceRegistry.waiterDeviceMatchesOwner(
+                ownerUserId: o,
+                username: u,
+                deviceCode: deviceCode,
+              )) {
+            loggedInWaiter = u;
+            ownerUserId = o;
+          } else if (u != null && u.isNotEmpty) {
+            await WaiterDeviceRegistry.deactivateByDeviceCode(deviceCode);
           }
         }
+      }
 
-        if (loggedInWaiter != null) break;
+      if (loggedInWaiter == null) {
+        final userDocs = await FirebaseFirestore.instance
+            .collection('users')
+            .get();
+
+        for (var userDoc in userDocs.docs) {
+          final userData = userDoc.data() as Map<String, dynamic>?;
+
+          if (userData != null && userData.containsKey('waiters')) {
+            final waiters = userData['waiters'] as List<dynamic>;
+
+            for (var waiter in waiters) {
+              if (waiter['active'] == false) continue;
+              String savedDevice = waiter['deviceCode'] ?? "";
+
+              if (savedDevice == deviceCode) {
+                loggedInWaiter = waiter['username']?.toString();
+                ownerUserId = userDoc.id;
+                break;
+              }
+            }
+          }
+
+          if (loggedInWaiter != null) break;
+        }
+      }
+
+      if (loggedInWaiter != null &&
+          ownerUserId != null &&
+          ownerUserId.isNotEmpty) {
+        await WaiterDeviceRegistry.upsert(
+          deviceCode: deviceCode,
+          ownerUserId: ownerUserId,
+          username: loggedInWaiter,
+          active: true,
+        );
       }
 
       if (loggedInWaiter != null) {
+        if (!mounted) return;
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (ctx) => WaiterHomeScreen(username: loggedInWaiter!),
+            builder: (ctx) => WaiterHomeScreen(
+              username: loggedInWaiter!,
+              ownerUserId: ownerUserId,
+            ),
           ),
         );
       } else {
+        if (!mounted) return;
         Navigator.of(
           context,
         ).push(MaterialPageRoute(builder: (ctx) => WaiterLoginScreen()));
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Error: $e')));

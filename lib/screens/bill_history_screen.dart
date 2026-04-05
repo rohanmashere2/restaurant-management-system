@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -33,6 +34,228 @@ class BillHistoryScreenState extends State<BillHistoryScreen> {
     return '$hour:$minuteString $period';
   }
 
+  Widget _buildFirestoreBillsTab(String uid) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('bill_records')
+          .orderBy('timestamp', descending: true)
+          .limit(100)
+          .snapshots(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snap.hasError) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Firestore: ${snap.error}',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
+        }
+        final docs = snap.data?.docs ?? [];
+        if (docs.isEmpty) {
+          return Center(
+            child: Text(
+              'No cloud bills yet. New checkouts are saved here in addition to Realtime DB.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.lato(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Colors.black54,
+              ),
+            ),
+          );
+        }
+        return ListView.builder(
+          itemCount: docs.length,
+          itemBuilder: (context, i) {
+            final d = docs[i].data();
+            final total = d['total_bill'];
+            final inv = d['invoice_no']?.toString() ?? '';
+            final table = d['table']?.toString() ?? '';
+            final tsVal = d['timestamp'];
+            int ms = 0;
+            if (tsVal is int) {
+              ms = tsVal;
+            } else if (tsVal is Timestamp) {
+              ms = tsVal.millisecondsSinceEpoch;
+            }
+            return ListTile(
+              title: Text(
+                'Rs ${total is num ? total.toStringAsFixed(2) : total}',
+                style: GoogleFonts.lato(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: const Color.fromARGB(255, 90, 57, 44),
+                ),
+              ),
+              subtitle: Text(
+                'Invoice: $inv · Table: $table',
+                style: GoogleFonts.lato(
+                  fontSize: 13,
+                  color: const Color.fromARGB(255, 90, 57, 44),
+                ),
+              ),
+              trailing: Text(
+                ms > 0 ? formatTimestamp(ms) : '',
+                style: GoogleFonts.lato(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: const Color.fromARGB(255, 151, 82, 54),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildLegacyRtdbTab(String uid) {
+    final usersRef = FirebaseDatabase.instance.ref().child('users/$uid/bills');
+
+    return StreamBuilder<DatabaseEvent>(
+      stream: usersRef.onValue,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
+          return Center(
+            child: Text(
+              "No history available",
+              style: GoogleFonts.lato(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+          );
+        }
+
+        final Map<dynamic, dynamic> data =
+            snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
+        List<Map<String, dynamic>> formattedHistory = [];
+
+        data.forEach((date, bills) {
+          final List<dynamic> billsList = List.from(bills as List<dynamic>);
+          double totalAmount = 0;
+
+          for (var bill in billsList) {
+            totalAmount += (bill['total_bill'] is int
+                ? (bill['total_bill'] as int).toDouble()
+                : bill['total_bill'] as double);
+          }
+
+          formattedHistory.add({
+            'date': date,
+            'totalAmount': totalAmount,
+            'bills': billsList,
+          });
+        });
+
+        // Sort dates by latest bill timestamp
+        formattedHistory.sort((a, b) {
+          final billsA = a['bills'] as List;
+          final billsB = b['bills'] as List;
+          final latestBillA = billsA.isNotEmpty
+              ? DateTime.fromMillisecondsSinceEpoch(billsA.last['timestamp'])
+              : DateTime(1970);
+          final latestBillB = billsB.isNotEmpty
+              ? DateTime.fromMillisecondsSinceEpoch(billsB.last['timestamp'])
+              : DateTime(1970);
+          return latestBillB.compareTo(latestBillA);
+        });
+
+        // Sort bills inside each date
+        for (var item in formattedHistory) {
+          item['bills'].sort((a, b) {
+            final timestampA = a['timestamp'] as int;
+            final timestampB = b['timestamp'] as int;
+            return DateTime.fromMillisecondsSinceEpoch(
+              timestampB,
+            ).compareTo(DateTime.fromMillisecondsSinceEpoch(timestampA));
+          });
+        }
+
+        return ListView.builder(
+          itemCount: formattedHistory.length,
+          itemBuilder: (context, index) {
+            final historyItem = formattedHistory[index];
+            final totalAmount = historyItem['totalAmount'];
+            final bills = historyItem['bills'];
+
+            return Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  color: Colors.grey[200],
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        formatDate(historyItem['date']),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'Total: Rs ${totalAmount.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(),
+                Column(
+                  children: bills.map<Widget>((bill) {
+                    return ListTile(
+                      title: Text(
+                        'Amount: Rs ${bill['total_bill'].toStringAsFixed(2)}',
+                        style: GoogleFonts.lato(
+                          fontSize: 18,
+                          color: const Color.fromARGB(255, 90, 57, 44),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Invoice No: ${bill['invoice_no']}',
+                        style: GoogleFonts.lato(
+                          fontSize: 12,
+                          color: Colors.black,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      trailing: Text(
+                        formatTimestamp(bill['timestamp']),
+                        style: GoogleFonts.lato(
+                          fontSize: 14,
+                          color: const Color.fromARGB(255, 90, 57, 44),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -40,156 +263,37 @@ class BillHistoryScreenState extends State<BillHistoryScreen> {
       return const Scaffold(body: Center(child: Text("User not logged in")));
     }
 
-    final usersRef = FirebaseDatabase.instance.ref().child(
-      'users/${user.uid}/bills',
-    );
-
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: const Color.fromARGB(255, 230, 106, 4),
-        title: Text(
-          'History',
-          style: GoogleFonts.lato(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 23,
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: const Color.fromARGB(255, 230, 106, 4),
+          title: Text(
+            'History',
+            style: GoogleFonts.lato(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 23,
+            ),
+          ),
+          bottom: TabBar(
+            indicatorColor: Colors.white,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
+            labelStyle: GoogleFonts.lato(fontWeight: FontWeight.bold),
+            tabs: const [
+              Tab(text: 'Cloud bills'),
+              Tab(text: 'Legacy (Realtime DB)'),
+            ],
           ),
         ),
-      ),
-      body: StreamBuilder<DatabaseEvent>(
-        stream: usersRef.onValue,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (!snapshot.hasData || snapshot.data!.snapshot.value == null) {
-            return Center(
-              child: Text(
-                "No history available",
-                style: GoogleFonts.lato(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
-            );
-          }
-
-          final Map<dynamic, dynamic> data =
-              snapshot.data!.snapshot.value as Map<dynamic, dynamic>;
-          List<Map<String, dynamic>> formattedHistory = [];
-
-          data.forEach((date, bills) {
-            final List<dynamic> billsList = List.from(bills as List<dynamic>);
-            double totalAmount = 0;
-
-            for (var bill in billsList) {
-              totalAmount += (bill['total_bill'] is int
-                  ? (bill['total_bill'] as int).toDouble()
-                  : bill['total_bill'] as double);
-            }
-
-            formattedHistory.add({
-              'date': date,
-              'totalAmount': totalAmount,
-              'bills': billsList,
-            });
-          });
-
-          // Sort dates by latest bill timestamp
-          formattedHistory.sort((a, b) {
-            final billsA = a['bills'] as List;
-            final billsB = b['bills'] as List;
-            final latestBillA = billsA.isNotEmpty
-                ? DateTime.fromMillisecondsSinceEpoch(billsA.last['timestamp'])
-                : DateTime(1970);
-            final latestBillB = billsB.isNotEmpty
-                ? DateTime.fromMillisecondsSinceEpoch(billsB.last['timestamp'])
-                : DateTime(1970);
-            return latestBillB.compareTo(latestBillA);
-          });
-
-          // Sort bills inside each date
-          for (var item in formattedHistory) {
-            item['bills'].sort((a, b) {
-              final timestampA = a['timestamp'] as int;
-              final timestampB = b['timestamp'] as int;
-              return DateTime.fromMillisecondsSinceEpoch(
-                timestampB,
-              ).compareTo(DateTime.fromMillisecondsSinceEpoch(timestampA));
-            });
-          }
-
-          return ListView.builder(
-            itemCount: formattedHistory.length,
-            itemBuilder: (context, index) {
-              final historyItem = formattedHistory[index];
-              final totalAmount = historyItem['totalAmount'];
-              final bills = historyItem['bills'];
-
-              return Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    color: Colors.grey[200],
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          formatDate(historyItem['date']),
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          'Total: Rs ${totalAmount.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(),
-                  Column(
-                    children: bills.map<Widget>((bill) {
-                      return ListTile(
-                        title: Text(
-                          'Amount: Rs ${bill['total_bill'].toStringAsFixed(2)}',
-                          style: GoogleFonts.lato(
-                            fontSize: 18,
-                            color: const Color.fromARGB(255, 90, 57, 44),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        subtitle: Text(
-                          'Invoice No: ${bill['invoice_no']}',
-                          style: GoogleFonts.lato(
-                            fontSize: 12,
-                            color: Colors.black,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        trailing: Text(
-                          formatTimestamp(bill['timestamp']),
-                          style: GoogleFonts.lato(
-                            fontSize: 14,
-                            color: const Color.fromARGB(255, 90, 57, 44),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              );
-            },
-          );
-        },
+        body: TabBarView(
+          children: [
+            _buildFirestoreBillsTab(user.uid),
+            _buildLegacyRtdbTab(user.uid),
+          ],
+        ),
       ),
     );
   }

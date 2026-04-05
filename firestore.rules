@@ -1,0 +1,26 @@
+rules_version = '2';
+// Deploy: firebase deploy --only firestore:rules
+//
+// Waiters still write `users/{ownerId}` (add_menu, waiters[]) without Firebase Auth.
+// Those paths stay open until you move writes to Cloud Functions. Bill records and
+// FCM metadata are restricted to the authenticated restaurant owner.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /waiter_devices/{deviceId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow create, update, delete: if true;
+
+      match /bill_records/{billId} {
+        allow read, write: if request.auth != null
+            && request.auth.uid == userId;
+      }
+    }
+  }
+}

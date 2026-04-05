@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:restaurant_management/models/order_line_status.dart';
 
 class WaiterCheckoutScreen extends StatefulWidget {
   final String ownerUserId;
@@ -19,7 +20,7 @@ class WaiterCheckoutScreen extends StatefulWidget {
 }
 
 class _WaiterCheckoutScreenState extends State<WaiterCheckoutScreen> {
-  Future<void> removeItem(String itemName) async {
+  Future<void> removeLine(Map<String, dynamic> orderLine) async {
     final ref = FirebaseFirestore.instance
         .collection("users")
         .doc(widget.ownerUserId);
@@ -35,7 +36,24 @@ class _WaiterCheckoutScreenState extends State<WaiterCheckoutScreen> {
       data["total_bill"] ?? {},
     );
 
-    int idx = orders.indexWhere((o) => o["name"] == itemName);
+    final lineId = orderLine["lineId"] as String?;
+    final itemName = orderLine["name"] as String?;
+    final note = (orderLine["note"] ?? "").toString().trim();
+
+    int idx = -1;
+    if (lineId != null) {
+      idx = orders.indexWhere((o) => o["lineId"] == lineId);
+    }
+    if (idx == -1 && itemName != null) {
+      idx = orders.indexWhere(
+        (o) =>
+            o["name"] == itemName &&
+            (o["note"] ?? "").toString().trim() == note,
+      );
+    }
+    if (idx == -1 && itemName != null) {
+      idx = orders.indexWhere((o) => o["name"] == itemName);
+    }
 
     if (idx == -1) return;
 
@@ -150,12 +168,47 @@ class _WaiterCheckoutScreenState extends State<WaiterCheckoutScreen> {
                                 color: Colors.brown,
                               ),
                             ),
-                            subtitle: Text(
-                              "Rs ${o["price"]}",
-                              style: GoogleFonts.lato(
-                                fontSize: 15,
-                                color: Colors.brown,
-                              ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 4),
+                                  child: Chip(
+                                    label: Text(
+                                      'Kitchen: ${OrderLineStatus.fromLine(o)}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    visualDensity: VisualDensity.compact,
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                                if ((o["note"] ?? "")
+                                    .toString()
+                                    .trim()
+                                    .isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: Text(
+                                      'Note: ${o["note"]}',
+                                      style: GoogleFonts.lato(
+                                        fontSize: 14,
+                                        fontStyle: FontStyle.italic,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                Text(
+                                  "Rs ${o["price"]}",
+                                  style: GoogleFonts.lato(
+                                    fontSize: 15,
+                                    color: Colors.brown,
+                                  ),
+                                ),
+                              ],
                             ),
                             trailing: IconButton(
                               icon: const Icon(
@@ -163,7 +216,8 @@ class _WaiterCheckoutScreenState extends State<WaiterCheckoutScreen> {
                                 color: Colors.brown,
                                 size: 30,
                               ),
-                              onPressed: () => removeItem(o["name"]),
+                              onPressed: () =>
+                                  removeLine(Map<String, dynamic>.from(o)),
                             ),
                           ),
                           const SizedBox(height: 10),

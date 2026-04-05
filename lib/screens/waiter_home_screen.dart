@@ -5,9 +5,18 @@ import 'package:restaurant_management/screens/waiter_menu_screen.dart';
 import 'package:restaurant_management/screens/waiter_profile_screen.dart';
 
 class WaiterHomeScreen extends StatefulWidget {
-  const WaiterHomeScreen({super.key, required this.username});
+  const WaiterHomeScreen({
+    super.key,
+    required this.username,
+    this.ownerUserId,
+    this.displayName,
+  });
 
   final String username;
+
+  /// When set (device index or login), skips scanning all `users` docs.
+  final String? ownerUserId;
+  final String? displayName;
 
   @override
   State<WaiterHomeScreen> createState() => _WaiterHomeScreenState();
@@ -19,7 +28,15 @@ class _WaiterHomeScreenState extends State<WaiterHomeScreen> {
   @override
   void initState() {
     super.initState();
-    _ownerInfoFuture = _findOwnerForWaiter(widget.username);
+    final oid = widget.ownerUserId;
+    if (oid != null && oid.isNotEmpty) {
+      _ownerInfoFuture = Future.value({
+        'ownerId': oid,
+        'fullName': widget.displayName ?? widget.username,
+      });
+    } else {
+      _ownerInfoFuture = _findOwnerForWaiter(widget.username);
+    }
   }
 
   /// Find manager-user document that contains this waiter

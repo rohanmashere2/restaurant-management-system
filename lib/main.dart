@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -13,7 +14,6 @@ final theme = ThemeData(
   ),
   textTheme: GoogleFonts.latoTextTheme(),
 );
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (Firebase.apps.isEmpty) {
@@ -21,6 +21,10 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
   }
+  // Local cache for Firestore: waiters can keep working through brief offline gaps.
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+  );
   runApp(ProviderScope(child: MyApp()));
 }
 
