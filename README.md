@@ -16,7 +16,7 @@
 **[📲 Download the Android APK](https://drive.google.com/file/d/1qJo7oLJ86iS36D3dBD9ABCtBkMowYxkR/view)**
  
 </div>
----
+
  
 ## 📑 Table of Contents
  
@@ -107,9 +107,7 @@ The app is backed entirely by **Firebase** (Authentication, Cloud Firestore, and
 </tr>
 </table>
 </div>
-> Filenames are the raw WhatsApp exports currently in `assets/screenshots/`. Feel free to rename them to something descriptive (e.g. `manager_home.jpeg`, `kitchen_display.jpeg`) and swap the `src` paths above to match — captions can also be added under each image with a plain line of text in the `<td>`.
- 
----
+
  
 ## 🗂️ Project Structure
  
