@@ -220,16 +220,6 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
  
 ---
  
-## 📬 Contact
- 
-**Rohan**
-B.Tech, Artificial Intelligence & Data Science — Dr. D. Y. Patil School of Science & Technology, Pune
- 
-- GitHub: `<add your GitHub profile link>`
-- LinkedIn: `<add your LinkedIn profile link>`
-- Email: `<add your email>`
----
- 
 <div align="center">
 Made with ❤️ using Flutter & Firebase
  
