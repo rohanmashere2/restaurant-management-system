@@ -5,8 +5,7 @@
  
 **Author: Rohan Mashere**
 <br>
-<i>B.Tech (Artificial Intelligence & Data Science)
-Dr. D. Y. Patil Vidypeeth, Pune</i>
+<i>B.Tech (Artificial Intelligence & Data Science), Dr. D. Y. Patil Vidypeeth, Pune</i>
  
 [![Flutter](https://img.shields.io/badge/Flutter-3.9-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Firebase](https://img.shields.io/badge/Firebase-Auth%20%7C%20Firestore%20%7C%20RTDB-FFCA28?logo=firebase&logoColor=black)](https://firebase.google.com)
@@ -17,7 +16,6 @@ Dr. D. Y. Patil Vidypeeth, Pune</i>
 **[📲 Download the Android APK](https://drive.google.com/file/d/1qJo7oLJ86iS36D3dBD9ABCtBkMowYxkR/view)**
  
 </div>
----
  
 ## 📑 Table of Contents
  
