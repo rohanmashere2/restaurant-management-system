@@ -4,9 +4,9 @@
 
 <h3>A Flutter + Firebase powered restaurant operations suite for Managers, Waiters & the Kitchen</h3>
 
-**Author: Rohan**
+**Author: Rohan Mashere**
 <br>
-<i>B.Tech (AI & Data Science) · Dr. D. Y. Patil School of Science & Technology, Pune</i>
+<i>B.Tech (AI & Data Science) · Dr. D. Y. Patil Vidyapeeth, Pune</i>
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.9-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
 [![Firebase](https://img.shields.io/badge/Firebase-Auth%20%7C%20Firestore%20%7C%20RTDB-FFCA28?logo=firebase&logoColor=black)](https://firebase.google.com)
